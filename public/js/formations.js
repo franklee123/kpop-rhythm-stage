@@ -78,6 +78,30 @@ window.FORMATION_TIMELINE = [
   }
 ];
 
+/**
+ * 隊形庫：songs.js 的走位計畫用名稱引用這些隊形
+ * 每位成員 [x, y]：x = 左右位置 0~100，y = 前後位置（72 後排 ~ 100 最前排），縮放依 y 自動計算
+ * 舞者框寬約 28%，x 建議在 15~85 之間，避免超出舞台
+ */
+window.FORMATION_SHAPES = {
+  PAIRS:         { m1: [33, 86], m2: [43, 90], m3: [57, 90], m4: [67, 86] }, // 兩兩一組靠中間
+  LINE:          { m1: [20, 89], m2: [40, 92], m3: [60, 92], m4: [80, 89] }, // 一字排開（微弧）
+  V_CENTER:      { m1: [22, 85], m2: [43, 95], m3: [57, 95], m4: [78, 85] }, // V 字，中間兩人在前
+  STAGGER:       { m1: [18, 88], m2: [39, 95], m3: [61, 89], m4: [82, 95] }, // 前後交錯
+  CHORUS:        { m1: [17, 94], m2: [39, 96], m3: [61, 96], m4: [83, 94] }, // 副歌拉開站前排
+  RIGHT:         { m1: [36, 90], m2: [51, 93], m3: [66, 93], m4: [81, 90] }, // 整體偏右
+  LEFT:          { m1: [16, 92], m2: [31, 94], m3: [46, 94], m4: [61, 92] }, // 集中左半邊
+  DIAMOND:       { m1: [50, 100], m2: [31, 87], m3: [69, 87], m4: [50, 77] }, // 菱形，M1 站 C 位
+  CLUSTER:       { m1: [47, 97], m2: [38, 90], m3: [62, 91], m4: [54, 84] }, // 往中間聚集
+  LINE_SWAP:     { m1: [40, 92], m2: [20, 89], m3: [80, 89], m4: [60, 92] }, // 一字排開（交叉換位後）
+  RIGHT_CLUSTER: { m1: [58, 95], m2: [48, 90], m3: [78, 94], m4: [68, 90] }, // 集中右半邊
+  FRONT:         { m1: [43, 99], m2: [28, 96], m3: [72, 96], m4: [57, 99] }, // 全員站到最前排
+  LINE_C:        { m1: [40, 93], m2: [20, 90], m3: [80, 90], m4: [60, 93] }, // 一字排開
+  WIDE:          { m1: [41, 97], m2: [24, 96], m3: [76, 96], m4: [59, 97] }, // 寬橫排
+  RIGHT_LINE:    { m1: [53, 92], m2: [40, 89], m3: [79, 89], m4: [66, 92] }, // 中間偏右橫排
+  FINAL:         { m1: [47, 97], m2: [39, 91], m3: [63, 91], m4: [55, 97] }  // 結尾聚中間擺 POSE
+};
+
 window.FormationEngine = (function () {
   const easings = {
     linear: (t) => t,
@@ -143,5 +167,51 @@ window.FormationEngine = (function () {
     return out;
   }
 
-  return { evaluate };
+  // 前後位置換算景深縮放：後排小、前排大
+  function scaleForY(y) {
+    const depth = Math.max(0, Math.min(1, (y - 72) / 28));
+    return Number((0.82 + depth * 0.3).toFixed(3));
+  }
+
+  /**
+   * 用「隊形計畫」產生整首歌的走位時間軸
+   * plan: [[到位秒數, "隊形名稱"], ...]  例如 [[0, "PAIRS"], [9, "LINE"], ...]
+   * opts.moveSec: 換隊形花幾秒移動（預設 1.6）。每個隊形會保持不動，到下一個隊形前 moveSec 秒才開始移動
+   * opts.offset:  整體往後（+）或往前（−）挪幾秒，用來對齊歌曲
+   * opts.shapes:  額外自訂隊形（會和 FORMATION_SHAPES 合併）
+   */
+  function fromPlan(plan, opts) {
+    const o = opts || {};
+    const shapes = Object.assign({}, window.FORMATION_SHAPES, o.shapes || {});
+    const moveSec = o.moveSec > 0 ? o.moveSec : 1.6;
+    const offset = Number(o.offset) || 0;
+
+    function membersOf(name) {
+      const shape = shapes[name];
+      if (!shape) throw new Error(`走位計畫裡的隊形「${name}」不存在`);
+      const out = {};
+      for (const id of Object.keys(shape)) {
+        const [x, y, scale] = shape[id];
+        out[id] = { x, y, scale: scale || scaleForY(y) };
+      }
+      return out;
+    }
+
+    const keyframes = [];
+    plan.forEach(([at, name], i) => {
+      const t = at + offset;
+      if (i > 0) {
+        const [prevAt, prevName] = plan[i - 1];
+        const holdEnd = Math.max(prevAt + offset, t - moveSec);
+        // 保持上一個隊形到開始移動的時間點
+        if (holdEnd > prevAt + offset + 0.01) {
+          keyframes.push({ time: holdEnd, easing: "linear", members: membersOf(prevName) });
+        }
+      }
+      keyframes.push({ time: t, easing: "easeInOutQuad", label: name, members: membersOf(name) });
+    });
+    return keyframes;
+  }
+
+  return { evaluate, fromPlan, scaleForY };
 })();

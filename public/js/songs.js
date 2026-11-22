@@ -50,7 +50,28 @@ window.SONG_LIST = [
     level: 2,
     introRevealAt: 2,  // 第 2 秒的大聲響之後，開頭標誌圖慢慢淡出進入 MV
     endCoverAt: 187.8, // 白底片尾圖花 2 秒淡入，在 3:10 推薦卡片跳出前完全蓋上
-    coverImage: "assets/images/bestie-love-options-end.png" // 開頭載入 + 片尾共用
+    coverImage: "assets/images/bestie-love-options-end.png", // 開頭載入 + 片尾共用
+
+    // 走位：參考 SBS 舞台版影片的隊形變化（[到位秒數, 隊形名稱]，隊形定義在 formations.js）
+    // 舞台版結尾 POSE 跟 MV 一樣在 3:10，先假設兩邊時間軸對齊；整體對不上就調 offset
+    formation: window.FormationEngine.fromPlan([
+      [0,     "PAIRS"],         // 0:00 兩兩一組
+      [9,     "LINE"],          // 0:09 一字排開
+      [23.5,  "V_CENTER"],      // 0:23 V 字
+      [33.5,  "STAGGER"],       // 0:33 前後交錯
+      [53.5,  "CHORUS"],        // 0:53 副歌拉開站前排
+      [73.5,  "RIGHT"],         // 1:13 整體偏右
+      [83.5,  "LEFT"],          // 1:23 集中左半邊
+      [98.5,  "DIAMOND"],       // 1:38 菱形，M1 站 C 位
+      [108.5, "CLUSTER"],       // 1:48 往中間聚集
+      [113.5, "LINE_SWAP"],     // 1:53 一字排開（交叉換位）
+      [123.5, "RIGHT_CLUSTER"], // 2:03 集中右半邊
+      [133.5, "FRONT"],         // 2:13 全員站到最前排
+      [143.5, "LINE_C"],        // 2:23 一字排開
+      [148.5, "WIDE"],          // 2:28 寬橫排
+      [168.5, "RIGHT_LINE"],    // 2:48 中間偏右橫排
+      [188.5, "FINAL"]          // 3:08 結尾聚中間擺 POSE
+    ], { moveSec: 1.6, offset: 0 })
 
     // 舞者影片準備好後，放進 public/assets/videos/love-options/，再把下面這段取消註解：
     // , members: {
