@@ -1143,6 +1143,9 @@
   /* =========================================================
      6. 舞者走位更新（Y-Sorting + C 位打光）
      ========================================================= */
+  // 前後深度放大倍率：走位資料的 y（72 後排 ~ 100 前排）在畫面上的前後距離放大幾倍
+  const DEPTH_GAIN = 1.8;
+
   function updateDancersTransform(timeSec) {
     const stageW = el.dancersLayer.clientWidth;
     const stageH = el.dancersLayer.clientHeight;
@@ -1166,7 +1169,9 @@
       if (!p) continue;
 
       const xPx = (p.x / 100) * stageW;
-      const yPx = (p.y / 100) * stageH;
+      // 加大前後深度：後排在畫面上站得更高（更深），前排維持在舞台前緣
+      const yView = 100 - (100 - p.y) * DEPTH_GAIN;
+      const yPx = (yView / 100) * stageH;
       const finalScale = p.scale * state.dancerScaleMult;
       const bobY = !m.hasVideo && state.playing ? -beatPulse * 5 : 0;
 

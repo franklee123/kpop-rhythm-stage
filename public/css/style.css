@@ -500,10 +500,10 @@ body.mode-theater .stage-viewport {
   position: relative;
   z-index: 12;
   width: 100%;
-  height: 31%;
+  height: 36%;
   flex-shrink: 0;
   overflow: visible;
-  margin-top: -16%; /* 往上疊到布幕下緣，舞者站在投影布幕前面 */
+  margin-top: -24%; /* 往上疊到布幕下半部，舞者站在投影布幕前面，後排可以站得更深 */
 }
 
 .stage-floor-glow {
@@ -532,7 +532,7 @@ body.mode-theater .stage-viewport {
   position: absolute;
   left: 0;
   top: 0;
-  width: 28%;
+  width: 22%; /* 縮小一點，左右才有空間做走位 */
   aspect-ratio: 2 / 3;
   transform-origin: 50% 100%;
   will-change: transform, filter;
