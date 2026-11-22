@@ -294,6 +294,7 @@
      2. Web Audio 輕量音效（免外部音檔，點擊後即解鎖）
      ========================================================= */
   function ensureAudioCtx() {
+    if (!state.sfxEnabled) return; // 音效關閉時完全不開啟音訊引擎
     if (!state.audioCtx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) state.audioCtx = new AC();
@@ -389,6 +390,9 @@
           modestbranding: 1,
           controls: 0,
           disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,   // 不顯示影片註解 / 資訊卡
+          cc_load_policy: 0,   // 不預設開啟字幕
           origin: window.location.origin
         },
         events: {
@@ -399,6 +403,7 @@
             queue.forEach((fn) => fn(state.ytPlayer));
           },
           onStateChange: handleYtStateChange,
+          onApiChange: disableYtCaptions, // 字幕模組載入時立刻關掉
           onError: (err) => {
             el.ledFallback.classList.remove("hidden");
             el.ledStatusText.textContent = `YT 錯誤碼 ${err.data}（請確認以 http://localhost 開啟）`;
@@ -408,6 +413,37 @@
     });
   }
 
+  // 關閉 YouTube 字幕（含自動翻譯字幕）。字幕模組會在播放後才載入，所以多處重複呼叫
+  function disableYtCaptions() {
+    const p = state.ytPlayer;
+    if (!p) return;
+    try {
+      if (typeof p.unloadModule === "function") {
+        p.unloadModule("captions");
+        p.unloadModule("cc");
+      }
+      if (typeof p.setOption === "function") {
+        p.setOption("captions", "track", {});
+      }
+    } catch (_) { /* 播放器尚未就緒時忽略 */ }
+  }
+
+  // LED 待機畫面蓋住 YouTube 播放器：MV 真正開始播放後才淡出，
+  // 遮住啟動時的播放鍵、讀取圈，以及暫停時的「更多影片」推薦畫面
+  let ytRevealTimer = null;
+  function revealYtScreen() {
+    clearTimeout(ytRevealTimer);
+    ytRevealTimer = setTimeout(() => {
+      if (state.clockMode === "youtube") el.ledFallback.classList.add("hidden");
+    }, 400);
+  }
+
+  function coverYtScreen(text) {
+    clearTimeout(ytRevealTimer);
+    el.ledFallback.classList.remove("hidden");
+    if (text) el.ledStatusText.textContent = text;
+  }
+
   function handleYtStateChange(evt) {
     const S = window.YT.PlayerState;
     if (evt.data === S.PLAYING) {
@@ -415,10 +451,18 @@
       state.lastRafTs = performance.now();
       updatePlayButton();
       syncVideosToMaster(true);
+      disableYtCaptions();
+      setTimeout(disableYtCaptions, 1000);
+      revealYtScreen();
+    } else if (evt.data === S.CUED) {
+      coverYtScreen("MV READY · 按 START 開始");
     } else if (evt.data === S.PAUSED || evt.data === S.ENDED) {
       state.playing = false;
       pauseAllMemberVideos();
       updatePlayButton();
+      if (state.clockMode === "youtube") {
+        coverYtScreen(evt.data === S.ENDED ? "THE END" : "PAUSED");
+      }
       // 選單歌曲播完 → 自動回到選歌畫面
       if (evt.data === S.ENDED && state.currentSong) {
         setTimeout(() => showMenu("select"), 900);
@@ -443,10 +487,10 @@
 
     ensureYtPlayer((player) => {
       const req = { videoId: videoId, startSeconds: o.startSeconds || 0 };
+      // 先蓋著待機畫面，等 PLAYING 事件才顯示 MV
+      coverYtScreen(o.autoplay ? "MV 載入中..." : "MV READY · 按 START 開始");
       if (o.autoplay) player.loadVideoById(req);
       else player.cueVideoById(req);
-      el.ledFallback.classList.add("hidden");
-      el.ledStatusText.textContent = `YT READY · ${videoId}`;
     });
   }
 
@@ -461,8 +505,12 @@
       if (state.ytPlayer && state.ytReady && typeof state.ytPlayer.pauseVideo === "function") {
         state.ytPlayer.pauseVideo();
       }
-    } else if (state.ytReady) {
-      el.ledFallback.classList.add("hidden");
+    } else if (
+      state.ytReady &&
+      typeof state.ytPlayer.getPlayerState === "function" &&
+      state.ytPlayer.getPlayerState() === window.YT.PlayerState.PLAYING
+    ) {
+      revealYtScreen(); // 只有 MV 正在播放時才露出播放器
     }
   }
 
@@ -1410,6 +1458,11 @@
     });
     el.chkSfx.addEventListener("change", () => {
       state.sfxEnabled = el.chkSfx.checked;
+      // 關閉音效時暫停整個音訊引擎，開啟時再恢復
+      if (state.audioCtx) {
+        if (state.sfxEnabled) state.audioCtx.resume().catch(() => {});
+        else state.audioCtx.suspend().catch(() => {});
+      }
     });
 
     // 舞者 / 舞台設定

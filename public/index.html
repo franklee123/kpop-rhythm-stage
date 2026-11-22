@@ -68,7 +68,8 @@
         <div class="led-truss"></div>
         <div class="led-frame">
           <!-- YouTube IFrame 掛載點（遊戲中 pointer-events: none 防誤觸） -->
-          <div id="yt-player-mount" class="yt-mount"></div>
+          <!-- 外層 yt-crop 會把播放器上下多出的區域裁掉，藏起 YouTube 標題列與標誌 -->
+          <div class="yt-crop"><div id="yt-player-mount"></div></div>
 
           <!-- 尚未載入 YouTube 時顯示的演唱會動態 LED 待機視覺 -->
           <div class="led-fallback" id="led-fallback">
