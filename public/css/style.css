@@ -206,12 +206,15 @@ body.mode-theater .stage-viewport {
 }
 
 /* ---------- 舞台背景光束 ---------- */
+/* 舞台燈光放在布幕上方（z 6）、舞者下方（z 12），燈光會掃過投影畫面，融為一體 */
 .stage-backdrop {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: 6;
   overflow: hidden;
+  mix-blend-mode: screen;
+  opacity: 0.75;
 }
 
 .spot-beam {
@@ -310,35 +313,87 @@ body.mode-theater .stage-viewport {
   color: #fff;
 }
 
-/* ---------- 第 1 層：背後巨型 16:9 LED 螢幕 ---------- */
+/* ---------- 第 1 層：舞台後方投影大布幕（MV） ---------- */
 .led-wall-section {
   position: relative;
   z-index: 5;
   width: 100%;
-  padding: 10px 10px 0 10px;
   flex-shrink: 0;
 }
 
+/* 布幕把投影光反射到四周的光暈 */
+.led-wall-section::before {
+  content: "";
+  position: absolute;
+  left: -12%;
+  right: -12%;
+  top: -8%;
+  bottom: -40%;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(196, 160, 255, 0.30) 0%, rgba(255, 79, 163, 0.14) 38%, transparent 70%);
+  filter: blur(18px);
+  pointer-events: none;
+  z-index: 0;
+  animation: screenGlow 6s ease-in-out infinite alternate;
+}
+@keyframes screenGlow {
+  from { opacity: 0.75; }
+  to   { opacity: 1; }
+}
+
+/* 布幕上方的燈架 */
 .led-truss {
-  height: 5px;
-  margin: 0 14px 4px;
-  border-radius: 3px;
+  position: absolute;
+  top: 0;
+  left: 6%;
+  right: 6%;
+  z-index: 2;
+  height: 4px;
+  border-radius: 2px;
   background: repeating-linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.25) 0 12px,
-    rgba(255, 255, 255, 0.05) 12px 18px
+    rgba(255, 255, 255, 0.22) 0 10px,
+    rgba(255, 255, 255, 0.04) 10px 15px
   );
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 
 .led-frame {
   position: relative;
+  z-index: 1;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #04050b;
-  border-radius: 10px;
+  background: #05060c;
   overflow: hidden;
-  border: 2px solid rgba(45, 226, 230, 0.4);
-  box-shadow: 0 0 24px rgba(45, 226, 230, 0.18), inset 0 0 20px rgba(0, 0, 0, 0.8);
+  /* 邊緣羽化：左右邊緣淡出、底部漸漸融進舞台，看起來像投影在布幕上而不是貼上去的影片框 */
+  -webkit-mask-image:
+    linear-gradient(180deg, #000 0%, #000 58%, transparent 100%),
+    linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(180deg, #000 0%, #000 58%, transparent 100%),
+    linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%);
+  mask-composite: intersect;
+}
+
+/* 投影質感：投影機中央亮區 + 四周暗角 + 細微布幕纖維紋 */
+.screen-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 48%, transparent 50%, rgba(4, 5, 12, 0.6) 100%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 3px);
+  animation: projectorFlicker 4s steps(1) infinite;
+}
+@keyframes projectorFlicker {
+  0%, 100% { opacity: 1; }
+  47%      { opacity: 0.94; }
+  49%      { opacity: 1; }
+  83%      { opacity: 0.96; }
 }
 
 /* YouTube 播放器：iframe 做成比螢幕高 50%，16:9 影片會剛好置中填滿 LED 螢幕，
@@ -347,6 +402,8 @@ body.mode-theater .stage-viewport {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  /* 投影出來的畫面稍微暗一點、對比柔和，比較像打在布幕上的光 */
+  filter: brightness(0.9) contrast(1.04) saturate(1.08);
 }
 .yt-crop iframe {
   position: absolute;
@@ -417,6 +474,7 @@ body.mode-theater .stage-viewport {
   height: 31%;
   flex-shrink: 0;
   overflow: visible;
+  margin-top: -16%; /* 往上疊到布幕下緣，舞者站在投影布幕前面 */
 }
 
 .stage-floor-glow {
@@ -937,7 +995,9 @@ body.mode-theater .stage-viewport {
   .title-beams span,
   .title-eq i,
   .title-press,
-  .menu-screen.active {
+  .menu-screen.active,
+  .screen-fx,
+  .led-wall-section::before {
     animation: none;
   }
 }

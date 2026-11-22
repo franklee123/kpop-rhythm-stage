@@ -428,20 +428,28 @@
     } catch (_) { /* 播放器尚未就緒時忽略 */ }
   }
 
-  // LED 待機畫面蓋住 YouTube 播放器：MV 真正開始播放後才淡出，
-  // 遮住啟動時的播放鍵、讀取圈，以及暫停時的「更多影片」推薦畫面
-  let ytRevealTimer = null;
+  // LED 待機畫面蓋住 YouTube 播放器：MV 開始播放後，要等 YouTube 自己的播放 / 暫停圖示動畫
+  // 跑完（實際連續播放 YT_REVEAL_DELAY_MS）才淡出；暫停 / 播完時再蓋回去，遮住「更多影片」推薦
+  const YT_REVEAL_DELAY_MS = 1300;
+  let ytRevealAt = 0; // 預定淡出的時間點（performance.now），0 = 不淡出
+
   function revealYtScreen() {
-    clearTimeout(ytRevealTimer);
-    ytRevealTimer = setTimeout(() => {
-      if (state.clockMode === "youtube") el.ledFallback.classList.add("hidden");
-    }, 400);
+    ytRevealAt = performance.now() + YT_REVEAL_DELAY_MS;
   }
 
   function coverYtScreen(text) {
-    clearTimeout(ytRevealTimer);
+    ytRevealAt = 0;
     el.ledFallback.classList.remove("hidden");
     if (text) el.ledStatusText.textContent = text;
+  }
+
+  // 由主迴圈每幀呼叫：時間到、而且 MV 仍在播放，才真正淡出待機畫面
+  function updateYtReveal(now) {
+    if (!ytRevealAt || now < ytRevealAt) return;
+    ytRevealAt = 0;
+    if (state.clockMode === "youtube" && state.playing) {
+      el.ledFallback.classList.add("hidden");
+    }
   }
 
   function handleYtStateChange(evt) {
@@ -453,7 +461,11 @@
       syncVideosToMaster(true);
       disableYtCaptions();
       setTimeout(disableYtCaptions, 1000);
-      revealYtScreen();
+      // 只有待機畫面還蓋著時才重新計時（播放中途緩衝完恢復播放時不必再蓋一次）
+      if (!el.ledFallback.classList.contains("hidden")) revealYtScreen();
+    } else if (evt.data === S.BUFFERING) {
+      // 還沒露出 MV 前遇到緩衝：取消計時，等再次 PLAYING 重新計算，避免露出讀取圈
+      if (!el.ledFallback.classList.contains("hidden")) ytRevealAt = 0;
     } else if (evt.data === S.CUED) {
       coverYtScreen("MV READY · 按 START 開始");
     } else if (evt.data === S.PAUSED || evt.data === S.ENDED) {
@@ -1093,6 +1105,7 @@
       }
     }
     state.lastRafTs = now;
+    updateYtReveal(now);
 
     const chartTime = getEffectiveChartTime();
     updateDancersTransform(state.masterTime - state.clipStart);
