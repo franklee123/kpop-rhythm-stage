@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>K-POP 延伸花道舞台節奏遊戲原型</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="mode-mobile">
+  <!-- 頂部工具列 -->
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>K-POP LIVE STAGE</span>
+    </div>
+
+    <div class="layout-switch" role="group" aria-label="排版模式切換">
+      <button id="btn-mode-mobile" class="seg-btn active" type="button">📱 9:16 手機鎖比例</button>
+      <button id="btn-mode-theater" class="seg-btn" type="button">🖥️ 桌機寬景劇院</button>
+    </div>
+
+    <div class="top-actions">
+      <button id="btn-play-toggle" class="btn btn-primary" type="button">▶ START LIVE</button>
+      <button id="btn-load-x4" class="btn btn-accent" type="button">🎬 載入影片(x4)</button>
+      <button id="btn-song-menu" class="btn btn-ghost" type="button">🎵 選歌</button>
+      <button id="btn-drawer-toggle" class="btn btn-ghost" type="button">⚙️ 控制台</button>
+    </div>
+  </header>
+
+  <!-- 隱藏檔案選取器（一次載入 4 人 / 單人載入） -->
+  <input id="file-video-x4" type="file" accept="video/mp4,video/webm,video/*" hidden />
+  <input id="file-video-single" type="file" accept="video/mp4,video/webm,video/*" hidden />
+
+  <!-- 主劇院外框 -->
+  <main class="theater-shell">
+    <!-- 桌機寬景劇院模式專用：兩側應援燈海 -->
+    <div class="crowd-side crowd-left" aria-hidden="true">
+      <div class="lightstick-field" id="crowd-left-sticks"></div>
+    </div>
+
+    <!-- 核心舞台容器（9:16 嚴格鎖比例，不拉長變形） -->
+    <section class="stage-viewport" id="stage-viewport">
+      <!-- 舞台背景光束與氛圍 -->
+      <div class="stage-backdrop" aria-hidden="true">
+        <div class="spot-beam beam-1"></div>
+        <div class="spot-beam beam-2"></div>
+        <div class="spot-beam beam-3"></div>
+      </div>
+
+      <!-- 左上角即時效能與同步 HUD -->
+      <div class="hud-debug" id="hud-debug">
+        <div><span class="hud-label">TIME</span> <span id="hud-time">0.000s</span></div>
+        <div><span class="hud-label">FPS</span> <span id="hud-fps">60</span></div>
+        <div><span class="hud-label">SYNC</span> <span id="hud-drift">0 ms</span> (<span id="hud-rate">1.00x</span>)</div>
+      </div>
+
+      <!-- 右上角分數與連擊 -->
+      <div class="hud-score">
+        <div class="score-val" id="hud-score">000000</div>
+        <div class="combo-wrap" id="hud-combo-wrap">
+          <span class="combo-num" id="hud-combo">0</span>
+          <span class="combo-txt">COMBO</span>
+        </div>
+      </div>
+
+      <!-- 第 1 層（遠景）：舞台背後巨型 16:9 LED 大螢幕（YouTube MV 播放器） -->
+      <div class="led-wall-section">
+        <div class="led-truss"></div>
+        <div class="led-frame">
+          <!-- YouTube IFrame 掛載點（遊戲中 pointer-events: none 防誤觸） -->
+          <div id="yt-player-mount" class="yt-mount"></div>
+
+          <!-- 尚未載入 YouTube 時顯示的演唱會動態 LED 待機視覺 -->
+          <div class="led-fallback" id="led-fallback">
+            <canvas id="led-visualizer"></canvas>
+            <div class="led-overlay-text">
+              <div class="led-tag">LIVE CONCERT LED SCREEN</div>
+              <div class="led-sub" id="led-status-text">DEMO LOOP · 128 BPM (7.375s)</div>
+            </div>
+          </div>
+
+          <!-- 防誤觸透明遮罩 -->
+          <div class="led-shield" id="led-shield" title="遊戲中鎖定避免誤觸暫停"></div>
+        </div>
+      </div>
+
+      <!-- 第 2 層（中景）：主舞台地板 ＋ 4 位 2D Q 版舞者（鎖 2:3 比例不變形） -->
+      <div class="main-stage-section" id="main-stage">
+        <div class="stage-floor-glow"></div>
+        <div class="dancers-layer" id="dancers-layer">
+          <!-- 由 js/app.js 動態生成 m1 ~ m4 舞者容器 -->
+        </div>
+      </div>
+
+      <!-- 第 3 層（前景）：往前延伸的 3D 透視直線花道（拍子往前滑） -->
+      <div class="runway-section" id="runway-section">
+        <canvas id="runway-canvas"></canvas>
+
+        <!-- 判定文字彈窗 (PERFECT / GREAT / GOOD / MISS) -->
+        <div class="judge-popup" id="judge-popup"></div>
+
+        <!-- 底部多點觸控點擊區（對應 4 軌或 1 軌） -->
+        <div class="touch-pads" id="touch-pads">
+          <button class="touch-pad" data-lane="0" type="button"><span>D</span></button>
+          <button class="touch-pad" data-lane="1" type="button"><span>F</span></button>
+          <button class="touch-pad" data-lane="2" type="button"><span>J</span></button>
+          <button class="touch-pad" data-lane="3" type="button"><span>K</span></button>
+        </div>
+      </div>
+
+      <!-- 開始畫面 + 音樂選單（同一個遮罩容器內切換；點擊同時解鎖手機自動播放限制） -->
+      <div class="start-overlay" id="start-overlay">
+        <!-- 畫面 1：開始畫面 -->
+        <div class="menu-screen screen-title active" id="screen-title">
+          <div class="title-beams" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div class="title-logo">
+            <div class="title-kicker">RUNWAY RHYTHM</div>
+            <h1 class="title-main">K-POP<br /><span>LIVE STAGE</span></h1>
+            <div class="title-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <button id="btn-title-start" class="btn btn-start-big title-press" type="button">▶ PRESS START</button>
+          <div class="start-hint">按 <b>Enter</b> 或點擊開始 · 遊戲中用 <b>D / F / J / K</b> 打拍</div>
+          <button id="btn-quick-demo" class="title-link" type="button">不選歌，直接玩 Demo 循環</button>
+        </div>
+
+        <!-- 畫面 2：音樂選單 -->
+        <div class="menu-screen screen-select" id="screen-select">
+          <div class="select-header">
+            <button id="btn-select-back" class="btn-icon select-back" type="button">‹ 返回</button>
+            <div class="select-title">SELECT MUSIC</div>
+            <span class="select-count" id="select-count"></span>
+          </div>
+          <div class="song-list" id="song-list" role="listbox" aria-label="歌曲清單"></div>
+          <div class="select-footer">
+            <div class="select-now-label">NOW SELECTED</div>
+            <div class="select-now-title" id="select-now-title">請選擇歌曲</div>
+            <button id="btn-song-start" class="btn btn-start-big" type="button" disabled>▶ START LIVE</button>
+            <div class="start-hint">↑↓ 選歌 · Enter 開始 · Esc 返回 · 雙擊歌曲直接開始</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 桌機寬景劇院模式專用：右側應援燈海 -->
+    <div class="crowd-side crowd-right" aria-hidden="true">
+      <div class="lightstick-field" id="crowd-right-sticks"></div>
+    </div>
+  </main>
+
+  <!-- 右側滑出式控制台抽屜 -->
+  <aside class="control-drawer" id="control-drawer" aria-label="控制台">
+    <div class="drawer-header">
+      <h2>舞台與對拍控制台</h2>
+      <button id="btn-drawer-close" class="btn-icon" type="button" aria-label="關閉">✕</button>
+    </div>
+
+    <div class="drawer-tabs">
+      <button class="tab-btn active" data-tab="tab-sync" type="button">同步 / YT</button>
+      <button class="tab-btn" data-tab="tab-stage" type="button">舞者 / 舞台</button>
+      <button class="tab-btn" data-tab="tab-chart" type="button">譜面 / 錄譜</button>
+    </div>
+
+    <!-- 分頁 1：同步 / YouTube -->
+    <div class="tab-panel active" id="tab-sync">
+      <div class="field-group">
+        <label>主時鐘來源</label>
+        <div class="radio-row">
+          <label class="chip-radio">
+            <input type="radio" name="clock-mode" value="demo" checked />
+            <span>Demo 循環 (7.375s)</span>
+          </label>
+          <label class="chip-radio">
+            <input type="radio" name="clock-mode" value="youtube" />
+            <span>YouTube MV 同步</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="input-yt-url">YouTube MV 網址或影片 ID</label>
+        <div class="input-row">
+          <input id="input-yt-url" type="text" placeholder="貼上 YouTube 連結或 11 碼 ID" value="https://www.youtube.com/watch?v=NPqtL1dtrlA" />
+          <button id="btn-load-yt" class="btn btn-primary btn-sm" type="button">載入</button>
+        </div>
+        <small class="hint">若透過 Eclipse 執行，請用 <code>http://localhost</code> 開啟以確保 YT API 正常播放。</small>
+      </div>
+
+      <div class="field-group two-col">
+        <div>
+          <label for="input-clip-start">舞段起始秒數 (clipStart)</label>
+          <input id="input-clip-start" type="number" step="0.05" value="0" />
+        </div>
+        <div>
+          <label for="input-clip-duration">舞段長度 (秒)</label>
+          <input id="input-clip-duration" type="number" step="0.05" value="7.375" />
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="range-offset">對拍延遲校正 Offset：<strong id="val-offset">0 ms</strong></label>
+        <input id="range-offset" type="range" min="-300" max="300" step="5" value="0" />
+        <small class="hint">覺得拍子偏早往右調(+)，覺得拍子偏晚往左調(-)。</small>
+      </div>
+
+      <div class="field-group">
+        <label class="checkbox-row">
+          <input id="chk-loop-clip" type="checkbox" checked />
+          <span>角色影片依舞段長度循環播放（測試 7 秒片段時勾選）</span>
+        </label>
+        <label class="checkbox-row">
+          <input id="chk-sfx" type="checkbox" checked />
+          <span>開啟打擊音效與 Demo 節拍器</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 分頁 2：舞者 / 舞台 -->
+    <div class="tab-panel" id="tab-stage">
+      <div class="field-group">
+        <label>快速載入測試影片（自動鎖 2:3 比例不變形）</label>
+        <button id="btn-drawer-load-x4" class="btn btn-accent btn-full" type="button">🎬 選取一支 MP4/WebM 套用到全部 4 人</button>
+      </div>
+
+      <div class="field-group">
+        <label>個別指定成員影片</label>
+        <div class="member-upload-grid">
+          <button class="btn btn-ghost btn-sm btn-load-one" data-member="m1" type="button">上傳 M1</button>
+          <button class="btn btn-ghost btn-sm btn-load-one" data-member="m2" type="button">上傳 M2</button>
+          <button class="btn btn-ghost btn-sm btn-load-one" data-member="m3" type="button">上傳 M3</button>
+          <button class="btn btn-ghost btn-sm btn-load-one" data-member="m4" type="button">上傳 M4</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="select-blend">角色背景去背模式</label>
+        <select id="select-blend">
+          <option value="screen" selected>濾色去黑預覽（測目前黑底 MP4 用）</option>
+          <option value="normal">原生透明通道（正式透明 WebM 用）</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="select-lanes">花道軌道模式</label>
+        <select id="select-lanes">
+          <option value="4" selected>4 軌直線花道（D / F / J / K）</option>
+          <option value="1">單軌極簡花道（空白鍵 / 單點）</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="range-dancer-scale">舞者整體大小：<strong id="val-dancer-scale">100%</strong></label>
+        <input id="range-dancer-scale" type="range" min="70" max="135" step="1" value="100" />
+      </div>
+
+      <div class="field-group">
+        <label for="range-note-speed">花道滑行時間 (下落速度)：<strong id="val-note-speed">1.35s</strong></label>
+        <input id="range-note-speed" type="range" min="0.7" max="2.2" step="0.05" value="1.35" />
+      </div>
+
+      <div class="field-group">
+        <label class="checkbox-row">
+          <input id="chk-formation" type="checkbox" checked />
+          <span>啟用 K-POP 交叉走位陣型（含前後遮擋與 C 位打光）</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 分頁 3：譜面 / 錄譜 -->
+    <div class="tab-panel" id="tab-chart">
+      <div class="field-group">
+        <label class="checkbox-row rec-box">
+          <input id="chk-record-mode" type="checkbox" />
+          <span>🔴 開啟即時錄譜模式（播放時敲 D/F/J/K 自動記錄毫秒拍點）</span>
+        </label>
+      </div>
+
+      <div class="field-group btn-row">
+        <button id="btn-chart-clear" class="btn btn-ghost btn-sm" type="button">清空譜面</button>
+        <button id="btn-chart-reset" class="btn btn-ghost btn-sm" type="button">恢復 Demo 譜面</button>
+        <button id="btn-chart-copy" class="btn btn-primary btn-sm" type="button">複製 JSON</button>
+      </div>
+
+      <div class="field-group">
+        <label for="txt-chart-json">譜面 JSON（可直接編輯或匯入，共 <span id="val-note-count">0</span> 顆音符）</label>
+        <textarea id="txt-chart-json" rows="10" spellcheck="false"></textarea>
+        <button id="btn-chart-apply" class="btn btn-accent btn-full btn-sm" type="button" style="margin-top:6px;">套用上方 JSON 到舞台</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 模組腳本（順序：陣型 -> 譜面 -> 歌單 -> 主程式） -->
+  <script src="js/formations.js"></script>
+  <script src="js/beatmap.js"></script>
+  <script src="js/songs.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
