@@ -93,6 +93,10 @@
     ytWarmStart: false,         // 本次開演是否由預熱接續（不會出現播放圖示）
     ytIconHideAt: 0,            // 播放圖示預計消失的時間點
     ytSyncHoldUntil: 0,         // 這個時間點之前暫停與 YouTube 對時
+
+    // 歌單的舞者影片（songs.js 的 members）
+    songVideos: false,          // 目前舞者影片是否來自歌單（整首歌、不循環）
+    videoOffset: 0,             // 舞者影片第 0 秒對應 MV 的第幾秒
     ytBaseVolume: null,         // 收尾前的 YT 音量，用來復原
     loopChart: false            // YouTube 模式下譜面是否依舞段長度循環（歌曲沒附專屬譜面時）
   };
@@ -225,6 +229,7 @@
         <div class="dancer-shadow"></div>
         <div class="dancer-media-box">
           <video class="dancer-video blend-screen" muted playsinline preload="auto"></video>
+          <canvas class="dancer-canvas"></canvas>
           ${createChibiSvg(m)}
         </div>
         <div class="dancer-label" style="border-color:${m.color}">${m.name}</div>
@@ -233,11 +238,17 @@
 
       const video = slot.querySelector(".dancer-video");
       const svg = slot.querySelector(".dancer-svg");
+      const canvas = slot.querySelector(".dancer-canvas");
       state.members[m.id] = {
         id: m.id,
         slot,
         video,
         svg,
+        canvas,
+        keyer: null,          // 綠幕去背器（第一次用到才建立）
+        keyerFailed: false,   // 瀏覽器不支援 WebGL 時改用濾色
+        lastDrawnTime: -1,    // 上次畫到畫布的影片時間，避免重複上傳同一格畫面
+        fromSong: false,      // 影片是否來自 songs.js（換歌時自動卸下）
         hasVideo: false,
         objectUrl: null
       };
@@ -270,9 +281,62 @@
     });
   }
 
-  function attachVideoSource(memberId, url, isBlob) {
+  /**
+   * 套用舞者影片的去背方式（state.blendMode）
+   * - "green":  綠幕去背（WebGL 畫到 canvas，影片本身隱藏但繼續播放）
+   * - "screen": 濾色去黑（黑底 MP4 用）
+   * - "normal": 原生透明通道（透明 WebM 用）
+   */
+  function applyMemberKeyMode(m) {
+    let mode = state.blendMode;
+    if (mode === "green" && !m.keyer && !m.keyerFailed) {
+      m.keyer = window.ChromaKeyer ? window.ChromaKeyer.create(m.canvas) : null;
+      if (!m.keyer) m.keyerFailed = true;
+    }
+    if (mode === "green" && !m.keyer) mode = "screen"; // 不支援 WebGL：退回濾色
+
+    const keyed = m.hasVideo && mode === "green";
+    m.video.classList.toggle("blend-screen", mode === "screen");
+    m.video.classList.toggle("keyed-source", keyed);
+    m.canvas.classList.toggle("active", keyed);
+    m.lastDrawnTime = -1; // 強制重畫
+  }
+
+  function applyKeyModeAll() {
+    for (const m of Object.values(state.members)) applyMemberKeyMode(m);
+  }
+
+  // 卸下舞者影片，恢復成內建 Q 版示範圖
+  function detachVideo(m) {
+    m.video.pause();
+    m.video.removeAttribute("src");
+    m.video.load();
+    if (m.objectUrl) {
+      URL.revokeObjectURL(m.objectUrl);
+      m.objectUrl = null;
+    }
+    m.video.classList.remove("active", "keyed-source");
+    m.canvas.classList.remove("active");
+    m.svg.classList.remove("hidden");
+    m.hasVideo = false;
+    m.fromSong = false;
+  }
+
+  // 綠幕模式：影片有新畫面時才重畫到 canvas（每幀由主迴圈呼叫）
+  function drawKeyedDancers() {
+    if (state.blendMode !== "green") return;
+    for (const m of Object.values(state.members)) {
+      if (!m.hasVideo || !m.keyer || m.video.readyState < 2) continue;
+      const t = m.video.currentTime;
+      if (t === m.lastDrawnTime) continue;
+      if (m.keyer.draw(m.video)) m.lastDrawnTime = t;
+    }
+  }
+
+  function attachVideoSource(memberId, url, isBlob, opts) {
     const m = state.members[memberId];
     if (!m) return;
+    const o = opts || {};
     if (m.objectUrl && m.objectUrl !== url) {
       URL.revokeObjectURL(m.objectUrl);
       m.objectUrl = null;
@@ -284,12 +348,14 @@
     m.video.playsInline = true;
     m.video.loop = state.loopClip;
     m.video.classList.add("active");
-    m.video.classList.toggle("blend-screen", state.blendMode === "screen");
     m.svg.classList.add("hidden");
     m.hasVideo = true;
+    m.fromSong = !!o.fromSong;
+    applyMemberKeyMode(m);
 
     m.video.onloadedmetadata = () => {
-      if (m.video.duration && Number.isFinite(m.video.duration) && m.video.duration > 0.5) {
+      // 歌單的整首歌影片不改舞段長度（舞段長度只給 7 秒測試短片循環用）
+      if (!m.fromSong && m.video.duration && Number.isFinite(m.video.duration) && m.video.duration > 0.5) {
         // 自動同步舞段長度到剛載入的影片實際秒數
         state.clipDuration = Number(m.video.duration.toFixed(3));
         el.inputClipDuration.value = state.clipDuration;
@@ -769,7 +835,9 @@
       return;
     }
 
-    const relTime = state.masterTime - state.clipStart;
+    // 舞者影片的第 0 秒對應 MV 的哪一秒：歌單影片用 memberOffset，測試短片用舞段起點 clipStart
+    const videoBase = state.songVideos ? state.videoOffset : state.clipStart;
+    const relTime = state.masterTime - videoBase;
     let driftSum = 0;
     let rateSample = 1.0;
 
@@ -1080,11 +1148,14 @@
     const stageH = el.dancersLayer.clientHeight;
     if (stageW <= 0 || stageH <= 0) return;
 
-    const poses = window.FormationEngine.evaluate(
-      timeSec,
-      state.formationEnabled,
-      state.clipDuration
-    );
+    // 選單歌曲有專屬走位（songs.js 的 formation）：依 MV 實際秒數、整首不循環；
+    // 沒有的話用 formations.js 的示範走位依舞段長度循環
+    const song = state.currentSong;
+    const songFormation = song && Array.isArray(song.formation) && song.formation.length > 0
+      ? song.formation : null;
+    const poses = songFormation
+      ? window.FormationEngine.evaluate(state.masterTime, state.formationEnabled, 0, songFormation, false)
+      : window.FormationEngine.evaluate(timeSec, state.formationEnabled, state.clipDuration);
 
     // 內建 SVG 示範舞者的輕微踩拍律動（載入真實影片後關閉，避免干擾原腳步）
     const beatPulse = Math.abs(Math.sin(timeSec * Math.PI * (128 / 60)));
@@ -1315,6 +1386,7 @@
 
     const chartTime = getEffectiveChartTime();
     updateDancersTransform(state.masterTime - state.clipStart);
+    drawKeyedDancers();
     renderRunway(chartTime);
     renderLedVisualizer(state.masterTime);
 
@@ -1457,6 +1529,41 @@
     updateSelectFooter();
   }
 
+  // 載入歌單指定的 4 人舞蹈影片（songs.js 的 members）。選歌時就先載入，開演前先緩衝
+  function applySongMembers(song) {
+    const list = song && song.members && typeof song.members === "object" ? song.members : null;
+
+    if (list) {
+      state.songVideos = true;
+      state.videoOffset = Number(song.memberOffset) || 0;
+      state.loopClip = false; // 整首歌的影片不循環
+      el.chkLoopClip.checked = false;
+      state.blendMode = song.memberKey || "green";
+      el.selectBlend.value = state.blendMode;
+
+      for (const m of window.KPOP_MEMBERS) {
+        const member = state.members[m.id];
+        const url = list[m.id];
+        if (url) {
+          const alreadyLoaded = member.fromSong && member.video.getAttribute("src") === url;
+          if (!alreadyLoaded) attachVideoSource(m.id, url, false, { fromSong: true });
+          member.video.loop = false;
+        } else if (member.fromSong) {
+          detachVideo(member);
+        }
+      }
+      applyKeyModeAll();
+    } else if (state.songVideos) {
+      // 這首沒有指定舞者影片：卸下上一首歌的影片，恢復示範圖
+      for (const member of Object.values(state.members)) {
+        if (member.fromSong) detachVideo(member);
+      }
+      state.songVideos = false;
+      state.loopClip = true;
+      el.chkLoopClip.checked = true;
+    }
+  }
+
   // 選取歌曲：帶入該首的網址，並讓 MV 在選單後面靜音預熱播放
   function selectSong(index) {
     const song = state.songs[index];
@@ -1473,6 +1580,7 @@
 
     el.inputYtUrl.value = song.url;
     warmupYoutube(vid, Math.max(0, Number(song.start) || 0));
+    applySongMembers(song);
     updateSelectFooter();
   }
 
@@ -1516,6 +1624,7 @@
 
     state.selectedSong = index;
     state.currentSong = song;
+    applySongMembers(song); // 已在選歌時載入的話不會重新載入
     state.clipStart = Math.max(0, Number(song.start) || 0);
     el.inputClipStart.value = state.clipStart;
     el.inputYtUrl.value = song.url;
@@ -1711,9 +1820,7 @@
     // 舞者 / 舞台設定
     el.selectBlend.addEventListener("change", () => {
       state.blendMode = el.selectBlend.value;
-      for (const m of Object.values(state.members)) {
-        m.video.classList.toggle("blend-screen", state.blendMode === "screen");
-      }
+      applyKeyModeAll();
     });
     el.selectLanes.addEventListener("change", () => {
       state.laneCount = parseInt(el.selectLanes.value, 10) === 1 ? 1 : 4;
@@ -1735,6 +1842,13 @@
     // 譜面 / 錄譜控制
     el.chkRecordMode.addEventListener("change", () => {
       state.recordMode = el.chkRecordMode.checked;
+      // 選單歌曲錄譜：改記錄整首歌的實際秒數（不循環），並清掉循環用的 Demo 譜面
+      if (state.recordMode && state.clockMode === "youtube" && state.loopChart) {
+        state.loopChart = false;
+        state.notes = [];
+        state.hitMap.clear();
+        refreshChartTextarea();
+      }
     });
     el.btnChartClear.addEventListener("click", () => {
       state.notes = [];

@@ -91,9 +91,11 @@ window.FormationEngine = (function () {
 
   /**
    * 依據目前秒數計算 4 位成員的即時座標、縮放、zIndex 與 C 位亮度
+   * - customTimeline: 指定走位時間軸（例如 songs.js 裡整首歌的 formation）；沒給就用 FORMATION_TIMELINE
+   * - loop:           false = 不循環（整首歌走位，超過最後一個關鍵幀就停在最後位置）
    */
-  function evaluate(timeSec, enabled, loopDuration) {
-    const timeline = window.FORMATION_TIMELINE;
+  function evaluate(timeSec, enabled, loopDuration, customTimeline, loop) {
+    const timeline = customTimeline || window.FORMATION_TIMELINE;
     if (!enabled || !timeline || timeline.length === 0) {
       return {
         m1: { x: 19, y: 88, scale: 0.95, zIndex: 880, brightness: 0.96 },
@@ -104,8 +106,11 @@ window.FormationEngine = (function () {
     }
 
     const lastTime = timeline[timeline.length - 1].time;
-    const cycle = loopDuration > 0 ? Math.min(loopDuration, lastTime) : lastTime;
-    const tNow = cycle > 0 ? ((timeSec % cycle) + cycle) % cycle : timeSec;
+    let tNow = timeSec;
+    if (loop !== false) {
+      const cycle = loopDuration > 0 ? Math.min(loopDuration, lastTime) : lastTime;
+      tNow = cycle > 0 ? ((timeSec % cycle) + cycle) % cycle : timeSec;
+    }
 
     let prev = timeline[0];
     let next = timeline[timeline.length - 1];

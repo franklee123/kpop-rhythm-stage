@@ -24,6 +24,21 @@
  * - color:  沒有縮圖時的卡片底色（選填）
  * - chart:  這首歌專用譜面（選填）。格式同 beatmap.js：[{ time: 秒數, lane: 0~3 }, ...]
  *           time 以「MV 實際秒數」計算。沒填的話會用 Demo 譜面依舞段長度循環。
+ *           錄法：開始這首歌 → 控制台「譜面 / 錄譜」勾選錄譜模式 → 邊聽邊敲 D/F/J/K
+ *           → 按「複製 JSON」貼到這裡
+ *
+ * ── 4 人舞蹈影片（選填）──
+ * - members:      每個人的整首舞蹈影片，例如 { m1: "assets/videos/love-options/m1.mp4", ... }
+ *                 影片放在 public/assets/videos/ 裡。選歌時就先載入，跟 MV 同步播放、不循環
+ * - memberKey:    影片背景去除方式（選填，預設 "green"）
+ *                 "green" = 綠幕背景 MP4（推薦）、"screen" = 黑底 MP4、"normal" = 透明 WebM
+ * - memberOffset: 舞者影片的第 0 秒對應 MV 的第幾秒（選填，預設 0 = 跟 MV 同時開始）
+ *                 例如舞者影片是從 MV 第 3.5 秒的地方開始剪的，就填 3.5
+ * - formation:    整首歌的走位時間軸（選填）。格式同 formations.js 的 FORMATION_TIMELINE，
+ *                 time 以 MV 實際秒數計算、整首不循環：
+ *                 [{ time: 0, easing: "easeInOutQuad",
+ *                    members: { m1: { x, y, scale }, m2: {...}, m3: {...}, m4: {...} } }, ...]
+ *                 沒填就用 formations.js 的示範走位循環
  */
 window.SONG_LIST = [
   {
@@ -36,6 +51,16 @@ window.SONG_LIST = [
     introRevealAt: 2,  // 第 2 秒的大聲響之後，開頭標誌圖慢慢淡出進入 MV
     endCoverAt: 187.8, // 白底片尾圖花 2 秒淡入，在 3:10 推薦卡片跳出前完全蓋上
     coverImage: "assets/images/bestie-love-options-end.png" // 開頭載入 + 片尾共用
+
+    // 舞者影片準備好後，放進 public/assets/videos/love-options/，再把下面這段取消註解：
+    // , members: {
+    //     m1: "assets/videos/love-options/m1.mp4",
+    //     m2: "assets/videos/love-options/m2.mp4",
+    //     m3: "assets/videos/love-options/m3.mp4",
+    //     m4: "assets/videos/love-options/m4.mp4"
+    //   },
+    //   memberKey: "green",
+    //   memberOffset: 0
   },
   {
     title: "歌曲 2",

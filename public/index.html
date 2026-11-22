@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>K-POP 延伸花道舞台節奏遊戲原型</title>
-  <link rel="stylesheet" href="css/style.css?v=20261122j" />
+  <link rel="stylesheet" href="css/style.css?v=20261122k" />
 </head>
 <body class="mode-mobile">
   <!-- 頂部工具列 -->
@@ -242,6 +242,7 @@
         <label for="select-blend">角色背景去背模式</label>
         <select id="select-blend">
           <option value="screen" selected>濾色去黑預覽（測目前黑底 MP4 用）</option>
+          <option value="green">綠幕去背（綠幕背景 MP4 用，推薦）</option>
           <option value="normal">原生透明通道（正式透明 WebM 用）</option>
         </select>
       </div>
@@ -296,9 +297,10 @@
   </aside>
 
   <!-- 模組腳本（順序：陣型 -> 譜面 -> 歌單 -> 主程式） -->
-  <script src="js/formations.js?v=20261122j"></script>
-  <script src="js/beatmap.js?v=20261122j"></script>
-  <script src="js/songs.js?v=20261122j"></script>
-  <script src="js/app.js?v=20261122j"></script>
+  <script src="js/formations.js?v=20261122k"></script>
+  <script src="js/beatmap.js?v=20261122k"></script>
+  <script src="js/songs.js?v=20261122k"></script>
+  <script src="js/chromakey.js?v=20261122k"></script>
+  <script src="js/app.js?v=20261122k"></script>
 </body>
 </html>

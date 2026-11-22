@@ -574,6 +574,23 @@ body.mode-theater .stage-viewport {
   display: block;
 }
 
+/* 綠幕模式：影片本身透明（仍持續播放當作畫面來源），由 canvas 顯示去背後的畫面 */
+.dancer-video.keyed-source {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.dancer-canvas {
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.dancer-canvas.active {
+  display: block;
+}
+
 /* 濾色模式：暫時用來去除目前黑底測試 MP4 的純黑背景 */
 .dancer-video.blend-screen {
   mix-blend-mode: screen;
