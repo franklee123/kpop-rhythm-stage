@@ -310,19 +310,21 @@
     const gain = state.audioCtx.createGain();
     osc.type = type || "triangle";
     osc.frequency.setValueAtTime(freq, now);
-    gain.gain.setValueAtTime(volume, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    // 先用 4ms 淡入再淡出，避免音量瞬間跳起造成「啪」的爆音
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     osc.connect(gain);
     gain.connect(state.audioCtx.destination);
     osc.start(now);
-    osc.stop(now + duration);
+    osc.stop(now + duration + 0.02);
   }
 
   function playHitSfx(grade) {
-    if (grade === "perfect") playTone(880, 0.065, 0.14, "triangle");
-    else if (grade === "great") playTone(660, 0.06, 0.11, "triangle");
-    else if (grade === "good") playTone(520, 0.055, 0.09, "sine");
-    else playTone(160, 0.09, 0.08, "sawtooth");
+    if (grade === "perfect") playTone(880, 0.065, 0.12, "triangle");
+    else if (grade === "great") playTone(660, 0.06, 0.10, "triangle");
+    else if (grade === "good") playTone(520, 0.055, 0.08, "sine");
+    else playTone(180, 0.08, 0.05, "sine"); // MISS：柔和低音（原本是刺耳的鋸齒波）
   }
 
   function playMetronomeTick(isAccent) {
@@ -736,7 +738,7 @@
       if (dt < -JUDGE_WINDOWS.miss) {
         if (state.playing && !state.recordMode) {
           state.hitMap.add(note.id);
-          registerJudgment("miss");
+          registerJudgment("miss", { silent: true }); // 漏拍不發聲，只顯示 MISS
         }
         continue;
       }
@@ -947,8 +949,8 @@
     updateTouchPadVisual(lane, false);
   }
 
-  function registerJudgment(grade) {
-    playHitSfx(grade);
+  function registerJudgment(grade, opts) {
+    if (!(opts && opts.silent)) playHitSfx(grade);
     if (grade === "perfect") {
       state.score += 1000;
       state.combo += 1;
