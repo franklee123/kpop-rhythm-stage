@@ -181,7 +181,9 @@ window.FormationEngine = (function () {
 
   /**
    * 用「隊形計畫」產生整首歌的走位時間軸
-   * plan: [[到位秒數, "隊形名稱", 移動秒數(選填)], ...]
+   * plan: [[到位秒數, 隊形, 移動秒數(選填), 說明(選填)], ...]
+   *       隊形可以是 FORMATION_SHAPES 裡的名稱，也可以直接寫每個人的座標：
+   *       { m1: [x, y], m2: [x, y], m3: [x, y], m4: [x, y] }
    *       例如 [[0, "BACK_TIGHT"], [21, "FRONT_CLUSTER", 5]] = 第 16 秒開始花 5 秒慢慢走到前方、第 21 秒到位
    * opts.moveSec: 換隊形預設花幾秒移動（預設 1.6）。每個隊形會保持不動，到下一個隊形前才開始移動
    * opts.offset:  整體往後（+）或往前（−）挪幾秒，用來對齊歌曲
@@ -194,7 +196,7 @@ window.FormationEngine = (function () {
     const offset = Number(o.offset) || 0;
 
     function membersOf(name) {
-      const shape = shapes[name];
+      const shape = typeof name === "object" && name ? name : shapes[name];
       if (!shape) throw new Error(`走位計畫裡的隊形「${name}」不存在`);
       const out = {};
       for (const id of Object.keys(shape)) {
@@ -205,7 +207,7 @@ window.FormationEngine = (function () {
     }
 
     const keyframes = [];
-    plan.forEach(([at, name, move], i) => {
+    plan.forEach(([at, name, move, note], i) => {
       const t = at + offset;
       const thisMove = move > 0 ? move : moveSec;
       if (i > 0) {
@@ -218,7 +220,8 @@ window.FormationEngine = (function () {
       }
       // 移動時間 2.5 秒以上視為慢慢走：用更平緩的 easeInOutSine
       const easing = thisMove >= 2.5 ? "easeInOutSine" : "easeInOutQuad";
-      keyframes.push({ time: t, easing, label: name, members: membersOf(name) });
+      const label = note || (typeof name === "string" ? name : "");
+      keyframes.push({ time: t, easing, label, members: membersOf(name) });
     });
     return keyframes;
   }
