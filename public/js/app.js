@@ -83,6 +83,7 @@
     selectedSong: -1,           // 選單中目前選取的歌曲 index
     currentSong: null,          // 正在演出的歌曲
     songEnding: false,          // 是否正在收尾（音量淡出中）
+    endCovered: false,          // 是否已進入片尾時段、大螢幕已蓋住
     ytBaseVolume: null,         // 收尾前的 YT 音量，用來復原
     loopChart: false            // YouTube 模式下譜面是否依舞段長度循環（歌曲沒附專屬譜面時）
   };
@@ -445,19 +446,27 @@
     if (text) el.ledStatusText.textContent = text;
   }
 
-  /* ---------- 選單歌曲結尾：在 YouTube 片尾推薦畫面出現前收尾 ---------- */
-  // YouTube 片尾畫面（推薦影片卡片）最長出現在影片最後 20 秒，多留 1 秒緩衝
-  const END_SCREEN_GUARD_SEC = 21;
+  /* ---------- 選單歌曲結尾：音樂完整播完，只把片尾推薦卡片的畫面蓋掉 ---------- */
+  // YouTube 片尾畫面（推薦影片卡片）最長出現在影片最後 20 秒
+  const END_SCREEN_COVER_SEC = 20;
   const OUTRO_FADE_MS = 2500;
   let outroTimer = null;
 
-  // 歌曲結束秒數：songs.js 有填 end 就用；否則用「影片長度 − 21 秒」
-  function getSongEndTime(player) {
+  // 從第幾秒開始蓋住大螢幕（音樂照常播放）：預設「影片長度 − 20 秒」，
+  // songs.js 可用 endCover 指定要蓋最後幾秒（例如片尾卡片只出現 10 秒就填 10，填 0 = 不蓋）
+  function getEndCoverTime(player) {
     const song = state.currentSong;
     if (!song) return Infinity;
-    if (Number(song.end) > 0) return Number(song.end);
+    const coverSec = song.endCover != null ? Math.max(0, Number(song.endCover) || 0) : END_SCREEN_COVER_SEC;
+    if (coverSec <= 0) return Infinity;
     const dur = typeof player.getDuration === "function" ? player.getDuration() : 0;
-    return dur > END_SCREEN_GUARD_SEC * 2 ? dur - END_SCREEN_GUARD_SEC : Infinity;
+    return dur > coverSec * 2 ? dur - coverSec : Infinity;
+  }
+
+  // 提早結束秒數：只有 songs.js 填了 end 才會在那一秒淡出收尾；沒填就播到影片最後
+  function getSongEndTime() {
+    const song = state.currentSong;
+    return song && Number(song.end) > 0 ? Number(song.end) : Infinity;
   }
 
   // 收尾：蓋上 THE END 待機畫面 → 音量淡出 → 暫停 → 回選歌畫面
@@ -500,13 +509,14 @@
       state.ytPlayer.setVolume(state.ytBaseVolume);
     }
     state.songEnding = false;
+    state.endCovered = false;
   }
 
   // 由主迴圈每幀呼叫：時間到、而且 MV 仍在播放，才真正淡出待機畫面
   function updateYtReveal(now) {
     if (!ytRevealAt || now < ytRevealAt) return;
     ytRevealAt = 0;
-    if (state.clockMode === "youtube" && state.playing) {
+    if (state.clockMode === "youtube" && state.playing && !state.endCovered) {
       el.ledFallback.classList.add("hidden");
     }
   }
@@ -1139,9 +1149,14 @@
         if (now - state.lastSyncCheckTs >= 200) {
           const ytTime = state.ytPlayer.getCurrentTime();
           const diff = ytTime - state.masterTime;
-          // 選單歌曲快到片尾推薦畫面時，提前收尾
-          if (state.currentSong && !state.songEnding && ytTime >= getSongEndTime(state.ytPlayer)) {
-            beginSongOutro();
+          if (state.currentSong && !state.songEnding) {
+            // 進入片尾推薦卡片時段：蓋住大螢幕、顯示歌名，音樂繼續播
+            if (!state.endCovered && ytTime >= getEndCoverTime(state.ytPlayer)) {
+              state.endCovered = true;
+              coverYtScreen(`♪ ${state.currentSong.title || ""}`);
+            }
+            // songs.js 有指定 end 才提早淡出收尾
+            if (ytTime >= getSongEndTime()) beginSongOutro();
           }
           if (Math.abs(diff) > 0.22) {
             state.masterTime = ytTime;
