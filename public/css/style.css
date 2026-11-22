@@ -376,6 +376,37 @@ body.mode-theater .stage-viewport {
   mask-composite: intersect;
 }
 
+/* 片尾畫面：白底 + 歌曲標誌圖，淡入蓋住 YouTube 片尾推薦卡片 */
+.end-card {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: #ffffff;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0s linear 0.6s;
+}
+.end-card.show {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.6s ease;
+}
+/* 標誌放在布幕上半部：下半部會被舞者擋住、底部也會羽化淡出 */
+.end-card img {
+  position: absolute;
+  left: 50%;
+  top: 6%;
+  height: 56%;
+  max-width: 86%;
+  object-fit: contain;
+  transform: translateX(-50%);
+}
+/* 顯示白底片尾時減弱暗角，讓背景看起來是乾淨的白 */
+.led-frame.end-showing .screen-fx {
+  opacity: 0.3;
+  animation: none;
+}
+
 /* 投影質感：投影機中央亮區 + 四周暗角 + 細微布幕纖維紋 */
 .screen-fx {
   position: absolute;

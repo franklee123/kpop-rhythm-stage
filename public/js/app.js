@@ -122,6 +122,9 @@
     hudComboWrap: document.getElementById("hud-combo-wrap"),
 
     ledFallback: document.getElementById("led-fallback"),
+    ledFrame: document.querySelector(".led-frame"),
+    endCard: document.getElementById("end-card"),
+    endCardImg: document.getElementById("end-card-img"),
     ledStatusText: document.getElementById("led-status-text"),
     ledVisCanvas: document.getElementById("led-visualizer"),
     dancersLayer: document.getElementById("dancers-layer"),
@@ -452,15 +455,31 @@
   const OUTRO_FADE_MS = 2500;
   let outroTimer = null;
 
-  // 從第幾秒開始蓋住大螢幕（音樂照常播放）：預設「影片長度 − 20 秒」，
-  // songs.js 可用 endCover 指定要蓋最後幾秒（例如片尾卡片只出現 10 秒就填 10，填 0 = 不蓋）
+  // 從第幾秒開始蓋住大螢幕（音樂照常播放）：
+  // songs.js 有填 endCoverAt（絕對秒數）就用；否則預設「影片長度 − 20 秒」，
+  // 也可用 endCover 指定要蓋最後幾秒（例如片尾卡片只出現 10 秒就填 10，填 0 = 不蓋）
   function getEndCoverTime(player) {
     const song = state.currentSong;
     if (!song) return Infinity;
+    if (Number(song.endCoverAt) > 0) return Number(song.endCoverAt);
     const coverSec = song.endCover != null ? Math.max(0, Number(song.endCover) || 0) : END_SCREEN_COVER_SEC;
     if (coverSec <= 0) return Infinity;
     const dur = typeof player.getDuration === "function" ? player.getDuration() : 0;
     return dur > coverSec * 2 ? dur - coverSec : Infinity;
+  }
+
+  // 片尾圖：songs.js 有填 endImage 才顯示（白底 + 圖），回傳是否有顯示
+  function showEndCard(song) {
+    if (!song || !song.endImage) return false;
+    el.endCardImg.src = song.endImage;
+    el.endCard.classList.add("show");
+    el.ledFrame.classList.add("end-showing");
+    return true;
+  }
+
+  function hideEndCard() {
+    el.endCard.classList.remove("show");
+    el.ledFrame.classList.remove("end-showing");
   }
 
   // 提早結束秒數：只有 songs.js 填了 end 才會在那一秒淡出收尾；沒填就播到影片最後
@@ -510,6 +529,7 @@
     }
     state.songEnding = false;
     state.endCovered = false;
+    hideEndCard();
   }
 
   // 由主迴圈每幀呼叫：時間到、而且 MV 仍在播放，才真正淡出待機畫面
@@ -563,6 +583,7 @@
       return;
     }
     state.ytVideoId = videoId;
+    hideEndCard(); // 換片時收起上一首的片尾圖
     setClockMode("youtube");
     el.ledStatusText.textContent = "載入 YouTube MV 中...";
 
@@ -581,6 +602,7 @@
       r.checked = r.value === mode;
     });
     if (mode === "demo") {
+      hideEndCard();
       el.ledFallback.classList.remove("hidden");
       el.ledStatusText.textContent = `DEMO LOOP · 128 BPM (${state.clipDuration}s)`;
       if (state.ytPlayer && state.ytReady && typeof state.ytPlayer.pauseVideo === "function") {
@@ -1154,6 +1176,7 @@
             if (!state.endCovered && ytTime >= getEndCoverTime(state.ytPlayer)) {
               state.endCovered = true;
               coverYtScreen(`♪ ${state.currentSong.title || ""}`);
+              showEndCard(state.currentSong); // 有指定片尾圖就蓋上白底片尾圖
             }
             // songs.js 有指定 end 才提早淡出收尾
             if (ytTime >= getSongEndTime()) beginSongOutro();
