@@ -82,6 +82,8 @@
     songs: Array.isArray(window.SONG_LIST) ? window.SONG_LIST : [],
     selectedSong: -1,           // 選單中目前選取的歌曲 index
     currentSong: null,          // 正在演出的歌曲
+    songEnding: false,          // 是否正在收尾（音量淡出中）
+    ytBaseVolume: null,         // 收尾前的 YT 音量，用來復原
     loopChart: false            // YouTube 模式下譜面是否依舞段長度循環（歌曲沒附專屬譜面時）
   };
 
@@ -443,6 +445,63 @@
     if (text) el.ledStatusText.textContent = text;
   }
 
+  /* ---------- 選單歌曲結尾：在 YouTube 片尾推薦畫面出現前收尾 ---------- */
+  // YouTube 片尾畫面（推薦影片卡片）最長出現在影片最後 20 秒，多留 1 秒緩衝
+  const END_SCREEN_GUARD_SEC = 21;
+  const OUTRO_FADE_MS = 2500;
+  let outroTimer = null;
+
+  // 歌曲結束秒數：songs.js 有填 end 就用；否則用「影片長度 − 21 秒」
+  function getSongEndTime(player) {
+    const song = state.currentSong;
+    if (!song) return Infinity;
+    if (Number(song.end) > 0) return Number(song.end);
+    const dur = typeof player.getDuration === "function" ? player.getDuration() : 0;
+    return dur > END_SCREEN_GUARD_SEC * 2 ? dur - END_SCREEN_GUARD_SEC : Infinity;
+  }
+
+  // 收尾：蓋上 THE END 待機畫面 → 音量淡出 → 暫停 → 回選歌畫面
+  function beginSongOutro() {
+    if (state.songEnding) return;
+    state.songEnding = true;
+    coverYtScreen("THE END");
+
+    const p = state.ytPlayer;
+    const startVol = typeof p.getVolume === "function" ? p.getVolume() : 100;
+    state.ytBaseVolume = startVol;
+    const t0 = performance.now();
+
+    clearInterval(outroTimer);
+    outroTimer = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / OUTRO_FADE_MS);
+      try { p.setVolume(Math.round(startVol * (1 - k))); } catch (_) { /* 忽略 */ }
+      if (k < 1) return;
+
+      clearInterval(outroTimer);
+      outroTimer = null;
+      try { p.pauseVideo(); } catch (_) { /* 忽略 */ }
+      state.playing = false;
+      pauseAllMemberVideos();
+      updatePlayButton();
+      setTimeout(() => {
+        try { p.setVolume(startVol); } catch (_) { /* 忽略 */ } // 暫停後再把音量調回來
+        showMenu("select");
+      }, 300);
+    }, 50);
+  }
+
+  function cancelSongOutro() {
+    if (outroTimer) {
+      clearInterval(outroTimer);
+      outroTimer = null;
+    }
+    if (state.songEnding && state.ytBaseVolume != null && state.ytPlayer &&
+        typeof state.ytPlayer.setVolume === "function") {
+      state.ytPlayer.setVolume(state.ytBaseVolume);
+    }
+    state.songEnding = false;
+  }
+
   // 由主迴圈每幀呼叫：時間到、而且 MV 仍在播放，才真正淡出待機畫面
   function updateYtReveal(now) {
     if (!ytRevealAt || now < ytRevealAt) return;
@@ -473,7 +532,7 @@
       pauseAllMemberVideos();
       updatePlayButton();
       if (state.clockMode === "youtube") {
-        coverYtScreen(evt.data === S.ENDED ? "THE END" : "PAUSED");
+        coverYtScreen(evt.data === S.ENDED || state.songEnding ? "THE END" : "PAUSED");
       }
       // 選單歌曲播完 → 自動回到選歌畫面
       if (evt.data === S.ENDED && state.currentSong) {
@@ -1080,6 +1139,10 @@
         if (now - state.lastSyncCheckTs >= 200) {
           const ytTime = state.ytPlayer.getCurrentTime();
           const diff = ytTime - state.masterTime;
+          // 選單歌曲快到片尾推薦畫面時，提前收尾
+          if (state.currentSong && !state.songEnding && ytTime >= getSongEndTime(state.ytPlayer)) {
+            beginSongOutro();
+          }
           if (Math.abs(diff) > 0.22) {
             state.masterTime = ytTime;
             clearHitsAt();
@@ -1302,6 +1365,7 @@
     if (!videoId) return;
 
     ensureAudioCtx();
+    cancelSongOutro();
     state.playing = false;
     pauseAllMemberVideos();
     updatePlayButton();
