@@ -1146,37 +1146,77 @@
   // 前後深度放大倍率：走位資料的 y（72 後排 ~ 100 前排）在畫面上的前後距離放大幾倍
   const DEPTH_GAIN = 1.8;
 
-  function updateDancersTransform(timeSec) {
-    const stageW = el.dancersLayer.clientWidth;
-    const stageH = el.dancersLayer.clientHeight;
-    if (stageW <= 0 || stageH <= 0) return;
+  // 走路動作：換位移動時每一拍踏一步（上下起伏 + 左右輕擺 + 往前進方向微傾），停下就恢復
+  const WALK = {
+    bpm: 128,
+    fullSpeed: 8,       // 移動速度（走位座標單位 / 秒）達到這個值時走路動作最明顯；慢走時動作較輕
+    bobPx: 6,           // 踏步上下起伏（像素）
+    swayDeg: 2.2,       // 左右輕擺角度
+    leanDeg: 3,         // 往前進方向傾斜角度
+    videoFactor: 0.45   // 舞者是真人影片時，走路動作減弱（影片本身已有動作）
+  };
+  let lastWalkTs = 0;
 
+  function getFormationPoses(t, timeSec) {
     // 選單歌曲有專屬走位（songs.js 的 formation）：依 MV 實際秒數、整首不循環；
     // 沒有的話用 formations.js 的示範走位依舞段長度循環
     const song = state.currentSong;
     const songFormation = song && Array.isArray(song.formation) && song.formation.length > 0
       ? song.formation : null;
-    const poses = songFormation
-      ? window.FormationEngine.evaluate(state.masterTime, state.formationEnabled, 0, songFormation, false)
+    return songFormation
+      ? window.FormationEngine.evaluate(t, state.formationEnabled, 0, songFormation, false)
       : window.FormationEngine.evaluate(timeSec, state.formationEnabled, state.clipDuration);
+  }
 
-    // 內建 SVG 示範舞者的輕微踩拍律動（載入真實影片後關閉，避免干擾原腳步）
-    const beatPulse = Math.abs(Math.sin(timeSec * Math.PI * (128 / 60)));
+  function updateDancersTransform(timeSec) {
+    const stageW = el.dancersLayer.clientWidth;
+    const stageH = el.dancersLayer.clientHeight;
+    if (stageW <= 0 || stageH <= 0) return;
+
+    const SAMPLE = 0.08; // 取 0.08 秒後的位置算出移動速度
+    const poses = getFormationPoses(state.masterTime, timeSec);
+    const posesNext = getFormationPoses(state.masterTime + SAMPLE, timeSec + SAMPLE);
+
+    const now = performance.now();
+    const dt = lastWalkTs ? Math.min(0.1, (now - lastWalkTs) / 1000) : 0;
+    lastWalkTs = now;
+
+    // 每拍一步：用 |sin| 做出一拍一次的踏步起伏，用 sin 做出左右交替的擺動
+    const stepPhase = timeSec * Math.PI * (WALK.bpm / 60);
+    const stepBob = Math.abs(Math.sin(stepPhase));
+    const stepSway = Math.sin(stepPhase);
 
     for (const id of Object.keys(state.members)) {
       const m = state.members[id];
       const p = poses[id];
       if (!p) continue;
 
+      // 移動速度 → 走路動作強度（平滑過渡，起步、停步不會突然切換）
+      const q = posesNext[id] || p;
+      const vx = (q.x - p.x) / SAMPLE;
+      const vy = (q.y - p.y) / SAMPLE;
+      const speed = Math.hypot(vx, vy * 0.7);
+      const target = state.playing ? Math.min(1, speed / WALK.fullSpeed) : 0;
+      m.walk = (m.walk || 0) + (target - (m.walk || 0)) * Math.min(1, dt * 5);
+
+      const amp = m.hasVideo ? WALK.videoFactor : 1;
+      const walk = m.walk * amp;
+      // 原地時：內建 Q 版圖有輕微踩拍律動（真人影片不加，避免干擾原本的腳步）
+      const idleBob = !m.hasVideo && state.playing ? stepBob * 4 * (1 - m.walk) : 0;
+      const bobY = -(idleBob + stepBob * WALK.bobPx * walk);
+      const lean = Math.max(-1, Math.min(1, vx / 10)) * WALK.leanDeg * walk;
+      const sway = stepSway * WALK.swayDeg * walk;
+
       const xPx = (p.x / 100) * stageW;
       // 加大前後深度：後排在畫面上站得更高（更深），前排維持在舞台前緣
       const yView = 100 - (100 - p.y) * DEPTH_GAIN;
       const yPx = (yView / 100) * stageH;
       const finalScale = p.scale * state.dancerScaleMult;
-      const bobY = !m.hasVideo && state.playing ? -beatPulse * 5 : 0;
 
       m.slot.style.zIndex = String(p.zIndex);
-      m.slot.style.transform = `translate3d(${xPx.toFixed(1)}px, ${(yPx + bobY).toFixed(1)}px, 0) translate(-50%, -100%) scale(${finalScale.toFixed(3)})`;
+      m.slot.style.transform =
+        `translate3d(${xPx.toFixed(1)}px, ${(yPx + bobY).toFixed(1)}px, 0) translate(-50%, -100%) ` +
+        `rotate(${(lean + sway).toFixed(2)}deg) scale(${finalScale.toFixed(3)})`;
       m.slot.style.filter = `brightness(${p.brightness.toFixed(2)})`;
     }
   }

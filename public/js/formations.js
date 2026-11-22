@@ -110,7 +110,9 @@ window.FormationEngine = (function () {
   const easings = {
     linear: (t) => t,
     easeInOutQuad: (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2),
-    easeOutCubic: (t) => 1 - Math.pow(1 - t, 3)
+    easeOutCubic: (t) => 1 - Math.pow(1 - t, 3),
+    // 更平緩的起步與停步，適合慢慢走的優雅換位
+    easeInOutSine: (t) => -(Math.cos(Math.PI * t) - 1) / 2
   };
 
   function lerp(a, b, t) {
@@ -214,7 +216,9 @@ window.FormationEngine = (function () {
           keyframes.push({ time: holdEnd, easing: "linear", members: membersOf(prevName) });
         }
       }
-      keyframes.push({ time: t, easing: "easeInOutQuad", label: name, members: membersOf(name) });
+      // 移動時間 2.5 秒以上視為慢慢走：用更平緩的 easeInOutSine
+      const easing = thisMove >= 2.5 ? "easeInOutSine" : "easeInOutQuad";
+      keyframes.push({ time: t, easing, label: name, members: membersOf(name) });
     });
     return keyframes;
   }
