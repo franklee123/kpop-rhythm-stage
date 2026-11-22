@@ -436,7 +436,8 @@
 
   // LED 待機畫面蓋住 YouTube 播放器：MV 開始播放後，要等 YouTube 自己的播放 / 暫停圖示動畫
   // 跑完（實際連續播放 YT_REVEAL_DELAY_MS）才淡出；暫停 / 播完時再蓋回去，遮住「更多影片」推薦
-  const YT_REVEAL_DELAY_MS = 1300;
+  // YouTube 開始播放後，中央的播放 / 暫停圖示約停留 3 秒才自動隱藏，所以等 4 秒再露出 MV
+  const YT_REVEAL_DELAY_MS = 4000;
   let ytRevealAt = 0; // 預定淡出的時間點（performance.now），0 = 不淡出
 
   function revealYtScreen() {
@@ -1193,8 +1194,11 @@
             // 進入片尾推薦卡片時段：蓋住大螢幕、顯示歌名，音樂繼續播
             if (!state.endCovered && ytTime >= getEndCoverTime(state.ytPlayer)) {
               state.endCovered = true;
-              coverYtScreen(`♪ ${state.currentSong.title || ""}`);
-              showEndCard(state.currentSong, "end"); // 有指定蓋板圖就蓋上白底片尾圖
+              // 有指定蓋板圖：白底標誌直接從 MV 慢慢淡入（不先閃出 LED 待機畫面）；
+              // 沒有的話才用 LED 待機畫面蓋住
+              if (!showEndCard(state.currentSong, "end")) {
+                coverYtScreen(`♪ ${state.currentSong.title || ""}`);
+              }
             }
             // songs.js 有指定 end 才提早淡出收尾
             if (ytTime >= getSongEndTime()) beginSongOutro();

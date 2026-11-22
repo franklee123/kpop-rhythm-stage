@@ -30,7 +30,7 @@ window.SONG_LIST = [
     start: 0,
     bpm: 128,
     level: 2,
-    endCoverAt: 189.3, // 3:10 片尾推薦卡片跳出前，換上白底片尾圖
+    endCoverAt: 187.8, // 白底片尾圖花 2 秒淡入，在 3:10 推薦卡片跳出前完全蓋上
     coverImage: "assets/images/bestie-love-options-end.png" // 開頭載入 + 片尾共用
   },
   {

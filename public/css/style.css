@@ -386,10 +386,11 @@ body.mode-theater .stage-viewport {
   visibility: hidden;
   transition: opacity 0.6s ease, visibility 0s linear 0.6s;
 }
+/* 片尾慢慢淡入（2 秒）；開頭載入時由程式直接蓋上、不淡入 */
 .end-card.show {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.6s ease;
+  transition: opacity 2s ease;
 }
 /* 開頭進入 MV 時用比較慢的淡出 */
 .end-card.slow {
@@ -408,7 +409,6 @@ body.mode-theater .stage-viewport {
 /* 顯示白底片尾時減弱暗角，讓背景看起來是乾淨的白 */
 .led-frame.end-showing .screen-fx {
   opacity: 0.3;
-  animation: none;
 }
 
 /* 投影質感：投影機中央亮區 + 四周暗角 + 細微布幕纖維紋 */
@@ -422,13 +422,7 @@ body.mode-theater .stage-viewport {
     radial-gradient(ellipse at 50% 48%, transparent 50%, rgba(4, 5, 12, 0.6) 100%),
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px),
     repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 3px);
-  animation: projectorFlicker 4s steps(1) infinite;
-}
-@keyframes projectorFlicker {
-  0%, 100% { opacity: 1; }
-  47%      { opacity: 0.94; }
-  49%      { opacity: 1; }
-  83%      { opacity: 0.96; }
+  transition: opacity 2s ease; /* 切換白底蓋板圖時，暗角跟著慢慢變化 */
 }
 
 /* YouTube 播放器：iframe 做成比螢幕高 50%，16:9 影片會剛好置中填滿 LED 螢幕，
