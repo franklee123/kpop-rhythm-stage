@@ -10,6 +10,12 @@ Love Options 的 4 人舞蹈影片放在這個資料夾
 - 綠幕背景（純綠色、打光均勻，角色不要穿綠色）
 - H.264 MP4，寬 480～720px
 - 每支 100MB 以內（GitHub 單一檔案上限）
-- 影片開頭跟 MV 同時開始；沒對齊的話在 js/songs.js 用 memberOffset 校正
+- 影片開頭跟 MV 同時開始；沒對齊的話在 js/love-options/song.js 用 memberOffset 校正
 
-放好之後，到 js/songs.js 把 Love Options 裡預留的 members 那段取消註解就會套用。
+放好之後，到 js/love-options/song.js 把預留的 members 那段取消註解就會套用。
+
+Love Options 的其他檔案：
+  js/love-options/song.js         基本設定
+  js/love-options/formation.js    走位
+  css/love-options/style.css      專屬樣式
+  assets/images/love-options/     圖片

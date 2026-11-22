@@ -1609,6 +1609,14 @@
     }
   }
 
+  // 選到哪首歌，<body> 就加上 class="song-<id>"，讓 css/<id>/style.css 只套用在那首歌
+  function setSongBodyClass(song) {
+    Array.from(document.body.classList).forEach((c) => {
+      if (c.startsWith("song-")) document.body.classList.remove(c);
+    });
+    if (song && song.id) document.body.classList.add(`song-${song.id}`);
+  }
+
   // 選取歌曲：帶入該首的網址，並讓 MV 在選單後面靜音預熱播放
   function selectSong(index) {
     const song = state.songs[index];
@@ -1626,6 +1634,7 @@
     el.inputYtUrl.value = song.url;
     warmupYoutube(vid, Math.max(0, Number(song.start) || 0));
     applySongMembers(song);
+    setSongBodyClass(song);
     updateSelectFooter();
   }
 
@@ -1670,6 +1679,7 @@
     state.selectedSong = index;
     state.currentSong = song;
     applySongMembers(song); // 已在選歌時載入的話不會重新載入
+    setSongBodyClass(song);
     state.clipStart = Math.max(0, Number(song.start) || 0);
     el.inputClipStart.value = state.clipStart;
     el.inputYtUrl.value = song.url;

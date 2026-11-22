@@ -21,6 +21,16 @@
 - `public/css/style.css`：9:16 鎖比例排版、桌機寬景劇院模式、燈光與角色 `object-fit: contain` 防拉長樣式。
 - `public/js/formations.js`：**陣型與走位時間軸**（修改座標 `x / y / scale` 與加減速曲線都改這支）。
 - `public/js/beatmap.js`：**測試譜面資料**（錄譜後複製出來的 JSON 直接貼回這裡即可）。
-- `public/js/songs.js`：**音樂選單歌單**（每首歌填歌名、YouTube 網址、起始秒數，可選填專屬譜面）。開始畫面 → 選歌畫面選好歌按 START，LED 大螢幕就會播放該首 MV。
+- `public/js/songs.js`：**音樂選單歌單**（決定選單裡有哪些歌、排什麼順序，並說明每首歌可用的欄位）。開始畫面 → 選歌畫面選好歌按 START，LED 大螢幕就會播放該首 MV。
+- `public/js/chromakey.js`：舞者影片的綠幕即時去背。
+
+### 每首歌的專屬檔案（依類型分資料夾，以 Love Options 為例）
+- `public/js/love-options/song.js`：基本設定（歌名、YouTube 網址、開頭 / 片尾蓋板時間、舞者影片）
+- `public/js/love-options/formation.js`：整首歌的走位
+- `public/css/love-options/style.css`：這首歌專屬的樣式（選到這首歌時 `<body>` 會有 `song-love-options`）
+- `public/assets/images/love-options/`：圖片（開頭 / 片尾的白底標誌圖 `cover.png`）
+- `public/assets/videos/love-options/`：4 人舞蹈影片 `m1.mp4` ~ `m4.mp4`
+
+新增歌曲時照同樣方式在各類型資料夾建立 `<歌曲 id>` 資料夾，並在 `index.html` 加上它的 `<script>` / `<link>`，再加進 `js/songs.js` 的歌單。
 - `public/js/app.js`：**核心主程式**（平滑主時鐘、YouTube 同步、4 支影片誤差追蹤、3D 花道 Canvas 繪製、多點觸控與錄譜）。
 - `public/assets/videos/`：放置 ComfyUI 產出的角色 MP4 / 透明 WebM 素材。

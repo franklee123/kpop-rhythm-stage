@@ -3,7 +3,7 @@
 【正式整首歌影片（推薦做法）】
 1. 每首歌開一個資料夾，例如 love-options/，放 4 個人的影片：
      love-options/m1.mp4、m2.mp4、m3.mp4、m4.mp4
-2. 在 js/songs.js 那首歌加上 members（Love Options 已經預留好範例，取消註解即可）
+2. 在那首歌的設定檔加上 members（Love Options 在 js/love-options/song.js，已經預留好範例，取消註解即可）
 3. 選歌時會自動載入，跟 MV 同步播放、不循環
 
 影片規格建議：
