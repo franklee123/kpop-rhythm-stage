@@ -16,6 +16,9 @@
  *           片尾蓋住推薦卡片時也顯示它。沒填就顯示 LED 待機動畫
  *           圖檔放在 public/assets/images/ 裡，這裡填相對路徑
  * - introImage / endImage: 想讓開頭和片尾用不同圖時再分別指定（選填，優先於 coverImage）
+ * - introRevealAt: 開頭標誌圖播到 MV 第幾秒才開始淡出（選填，例如音樂第一個重拍的秒數）。
+ *           沒填就在播放圖示消失後淡出。選歌時 MV 會先在選單後面靜音預熱，讓 YouTube
+ *           中央的播放圖示提早消失，所以開演後可以在很前面的秒數就淡出
  * - bpm:    選單上顯示用的 BPM（選填）
  * - level:  選單上顯示的難度星數 1~5（選填）
  * - color:  沒有縮圖時的卡片底色（選填）
@@ -30,6 +33,7 @@ window.SONG_LIST = [
     start: 0,
     bpm: 128,
     level: 2,
+    introRevealAt: 2,  // 第 2 秒的大聲響之後，開頭標誌圖慢慢淡出進入 MV
     endCoverAt: 187.8, // 白底片尾圖花 2 秒淡入，在 3:10 推薦卡片跳出前完全蓋上
     coverImage: "assets/images/bestie-love-options-end.png" // 開頭載入 + 片尾共用
   },

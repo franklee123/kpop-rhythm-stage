@@ -84,6 +84,15 @@
     currentSong: null,          // 正在演出的歌曲
     songEnding: false,          // 是否正在收尾（音量淡出中）
     endCovered: false,          // 是否已進入片尾時段、大螢幕已蓋住
+
+    // YouTube 預熱（選單期間靜音播放，讓播放圖示先消失）
+    ytWarmup: false,            // 是否正在預熱
+    ytWarmupVideoId: "",
+    ytWarmupStart: 0,
+    ytWarmupSince: 0,           // 預熱開始播放的時間點（performance.now）
+    ytWarmStart: false,         // 本次開演是否由預熱接續（不會出現播放圖示）
+    ytIconHideAt: 0,            // 播放圖示預計消失的時間點
+    ytSyncHoldUntil: 0,         // 這個時間點之前暫停與 YouTube 對時
     ytBaseVolume: null,         // 收尾前的 YT 音量，用來復原
     loopChart: false            // YouTube 模式下譜面是否依舞段長度循環（歌曲沒附專屬譜面時）
   };
@@ -438,16 +447,73 @@
   // 跑完（實際連續播放 YT_REVEAL_DELAY_MS）才淡出；暫停 / 播完時再蓋回去，遮住「更多影片」推薦
   // YouTube 開始播放後，中央的播放 / 暫停圖示約停留 3 秒才自動隱藏，所以等 4 秒再露出 MV
   const YT_REVEAL_DELAY_MS = 4000;
+  // 預熱開演（選單期間已靜音播放）時，只需短暫蓋住跳回起點可能出現的讀取圈
+  const WARM_REVEAL_DELAY_MS = 600;
   let ytRevealAt = 0; // 預定淡出的時間點（performance.now），0 = 不淡出
 
   function revealYtScreen() {
-    ytRevealAt = performance.now() + YT_REVEAL_DELAY_MS;
+    const delay = state.ytWarmStart ? WARM_REVEAL_DELAY_MS : YT_REVEAL_DELAY_MS;
+    // 預熱時間太短、播放圖示可能還沒消失時，至少等到 ytIconHideAt
+    ytRevealAt = Math.max(performance.now() + delay, state.ytIconHideAt || 0);
   }
 
   function coverYtScreen(text) {
     ytRevealAt = 0;
+    // 蓋回去（暫停等）之後再播放，YouTube 會重新顯示播放圖示，要恢復成完整等待時間
+    state.ytWarmStart = false;
+    state.ytIconHideAt = 0;
     el.ledFallback.classList.remove("hidden");
     if (text) el.ledStatusText.textContent = text;
+  }
+
+  /* ---------- 預熱：選歌時先在選單後面靜音播放 MV ----------
+     YouTube 開始播放時中央的播放圖示會停留約 3 秒，網頁無法直接隱藏它。
+     所以選到歌時就先靜音播放，圖示在使用者看選單時就自己消失；
+     按 START 時只要跳回起點、取消靜音，不必重新開始播放，圖示就不會再出現。 */
+  function warmupYoutube(videoId, startSeconds) {
+    state.ytVideoId = videoId;
+    hideEndCard();
+    setClockMode("youtube");
+    state.ytWarmup = true;
+    state.ytWarmupVideoId = videoId;
+    state.ytWarmupStart = startSeconds;
+    state.ytWarmupSince = 0;
+    coverYtScreen("MV READY · 按 START 開始");
+
+    ensureYtPlayer((player) => {
+      if (!state.ytWarmup || state.ytWarmupVideoId !== videoId) return; // 已換歌或已開演
+      player.mute(); // 先靜音再播放，避免漏出聲音
+      player.loadVideoById({ videoId: videoId, startSeconds: startSeconds });
+    });
+  }
+
+  // 預熱期間的播放器事件：只記錄狀態，不啟動遊戲
+  function handleWarmupState(evt) {
+    const S = window.YT.PlayerState;
+    if (evt.data === S.PLAYING) {
+      if (!state.ytWarmupSince) state.ytWarmupSince = performance.now();
+      disableYtCaptions();
+    } else if (evt.data === S.ENDED) {
+      // 在選單停留太久、預熱播到底：跳回起點繼續靜音播放
+      try {
+        state.ytPlayer.seekTo(state.ytWarmupStart, true);
+        state.ytPlayer.playVideo();
+      } catch (_) { /* 忽略 */ }
+      state.ytWarmupSince = 0;
+    } else if (evt.data !== S.BUFFERING) {
+      state.ytWarmupSince = 0; // 暫停等狀態：下次播放會重新出現圖示，重新計時
+    }
+  }
+
+  function isWarmupReady(videoId) {
+    if (!state.ytWarmup || state.ytWarmupVideoId !== videoId || !state.ytReady || !state.ytWarmupSince) {
+      return false;
+    }
+    try {
+      return state.ytPlayer.getPlayerState() === window.YT.PlayerState.PLAYING;
+    } catch (_) {
+      return false;
+    }
   }
 
   /* ---------- 選單歌曲結尾：音樂完整播完，只把片尾推薦卡片的畫面蓋掉 ---------- */
@@ -552,6 +618,13 @@
   // 由主迴圈每幀呼叫：時間到、而且 MV 仍在播放，才真正淡出待機畫面
   function updateYtReveal(now) {
     if (!ytRevealAt || now < ytRevealAt) return;
+    // songs.js 有指定 introRevealAt：開頭標誌圖要等 MV 播到那一秒（例如重拍、大聲響）才淡出
+    const song = state.currentSong;
+    if (song && Number(song.introRevealAt) > 0 && !state.endCovered &&
+        el.endCard.classList.contains("show") &&
+        state.masterTime < Number(song.introRevealAt)) {
+      return; // 還沒到，下一幀再檢查
+    }
     ytRevealAt = 0;
     if (state.clockMode === "youtube" && state.playing && !state.endCovered) {
       el.ledFallback.classList.add("hidden");
@@ -562,6 +635,11 @@
 
   function handleYtStateChange(evt) {
     const S = window.YT.PlayerState;
+    if (state.ytWarmup) {
+      handleWarmupState(evt);
+      return;
+    }
+    if (state.clockMode !== "youtube") return; // Demo 模式下 YT 暫停等事件不影響遊戲
     if (evt.data === S.PLAYING) {
       state.playing = true;
       state.lastRafTs = performance.now();
@@ -606,10 +684,13 @@
     setClockMode("youtube");
     el.ledStatusText.textContent = "載入 YouTube MV 中...";
 
+    state.ytWarmup = false;
+
     ensureYtPlayer((player) => {
       const req = { videoId: videoId, startSeconds: o.startSeconds || 0 };
       // 先蓋著待機畫面，等 PLAYING 事件才顯示 MV
       coverYtScreen(o.autoplay ? "MV 載入中..." : "MV READY · 按 START 開始");
+      if (typeof player.unMute === "function") player.unMute(); // 解除預熱時的靜音
       if (o.autoplay) player.loadVideoById(req);
       else player.cueVideoById(req);
     });
@@ -621,6 +702,7 @@
       r.checked = r.value === mode;
     });
     if (mode === "demo") {
+      state.ytWarmup = false;
       hideEndCard();
       el.ledFallback.classList.remove("hidden");
       el.ledStatusText.textContent = `DEMO LOOP · 128 BPM (${state.clipDuration}s)`;
@@ -1187,7 +1269,8 @@
         }
       } else if (state.ytPlayer && state.ytReady && typeof state.ytPlayer.getCurrentTime === "function") {
         // 每 200ms 與 YouTube 播放器比對一次平滑校正，不跳針
-        if (now - state.lastSyncCheckTs >= 200) {
+        // 預熱開演剛跳回起點時，YouTube 回報的時間可能還是舊的，先暫停同步一下
+        if (now - state.lastSyncCheckTs >= 200 && now >= (state.ytSyncHoldUntil || 0)) {
           const ytTime = state.ytPlayer.getCurrentTime();
           const diff = ytTime - state.masterTime;
           if (state.currentSong && !state.songEnding) {
@@ -1312,10 +1395,11 @@
 
     if (which === "select") {
       ensureYtPlayer(); // 先在背景準備好 YT 播放器
-      if (state.selectedSong < 0) {
-        const first = state.songs.findIndex((s) => songVideoId(s));
-        if (first >= 0) selectSong(first);
-      }
+      // 選取（或重新選取）目前歌曲，讓 MV 在選單後面開始靜音預熱
+      const idx = state.selectedSong >= 0
+        ? state.selectedSong
+        : state.songs.findIndex((s) => songVideoId(s));
+      if (idx >= 0) selectSong(idx);
       const card = el.songList.querySelector(".song-card.selected");
       if (card) card.focus();
     } else {
@@ -1373,7 +1457,7 @@
     updateSelectFooter();
   }
 
-  // 選取歌曲：帶入該首的網址並把 MV 預先載入 LED 螢幕（不播放）
+  // 選取歌曲：帶入該首的網址，並讓 MV 在選單後面靜音預熱播放
   function selectSong(index) {
     const song = state.songs[index];
     const vid = songVideoId(song);
@@ -1388,7 +1472,7 @@
     });
 
     el.inputYtUrl.value = song.url;
-    loadYoutubeVideo(vid, { autoplay: false, startSeconds: Math.max(0, Number(song.start) || 0) });
+    warmupYoutube(vid, Math.max(0, Number(song.start) || 0));
     updateSelectFooter();
   }
 
@@ -1455,7 +1539,27 @@
     el.hudComboWrap.classList.remove("show");
 
     hideMenu();
-    loadYoutubeVideo(videoId, { autoplay: true, startSeconds: state.clipStart });
+
+    if (isWarmupReady(videoId)) {
+      // 預熱中：MV 已在背景播放、播放圖示已消失 → 跳回起點、取消靜音，直接開演
+      const p = state.ytPlayer;
+      const iconHideAt = state.ytWarmupSince + YT_REVEAL_DELAY_MS;
+      state.ytWarmup = false;
+      coverYtScreen("MV 載入中...");
+      state.ytWarmStart = true;
+      state.ytIconHideAt = iconHideAt;
+      p.seekTo(state.clipStart, true);
+      p.unMute();
+      state.ytSyncHoldUntil = performance.now() + 500;
+      state.playing = true;
+      state.lastRafTs = performance.now();
+      updatePlayButton();
+      syncVideosToMaster(true);
+      revealYtScreen();
+    } else {
+      // 還沒預熱好（例如一選歌就馬上開始）：照一般方式載入播放
+      loadYoutubeVideo(videoId, { autoplay: true, startSeconds: state.clipStart });
+    }
     // 載入期間先用白底標誌圖擋著，MV 開始播放後才慢慢淡出
     showEndCard(song, "intro", true);
   }
