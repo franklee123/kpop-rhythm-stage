@@ -468,16 +468,32 @@
     return dur > coverSec * 2 ? dur - coverSec : Infinity;
   }
 
-  // 片尾圖：songs.js 有填 endImage 才顯示（白底 + 圖），回傳是否有顯示
-  function showEndCard(song) {
-    if (!song || !song.endImage) return false;
-    el.endCardImg.src = song.endImage;
+  // 開頭 / 片尾的白底蓋板圖：songs.js 的 coverImage 兩邊共用，
+  // 也可用 introImage / endImage 分別指定
+  function getCoverImage(song, which) {
+    if (!song) return "";
+    return (which === "intro" ? song.introImage : song.endImage) || song.coverImage || "";
+  }
+
+  // 顯示白底蓋板圖，回傳是否有顯示。instant = 不要淡入，直接蓋上（開頭載入時用）
+  function showEndCard(song, which, instant) {
+    const src = getCoverImage(song, which || "end");
+    if (!src) return false;
+    el.endCardImg.src = src;
+    el.endCard.classList.remove("slow");
+    if (instant) el.endCard.style.transition = "none";
     el.endCard.classList.add("show");
     el.ledFrame.classList.add("end-showing");
+    if (instant) {
+      void el.endCard.offsetWidth; // 強制套用，避免淡入
+      el.endCard.style.transition = "";
+    }
     return true;
   }
 
-  function hideEndCard() {
+  // 收起蓋板圖。slow = 慢慢淡出（開頭進入 MV 時用）
+  function hideEndCard(slow) {
+    el.endCard.classList.toggle("slow", !!slow);
     el.endCard.classList.remove("show");
     el.ledFrame.classList.remove("end-showing");
   }
@@ -538,6 +554,8 @@
     ytRevealAt = 0;
     if (state.clockMode === "youtube" && state.playing && !state.endCovered) {
       el.ledFallback.classList.add("hidden");
+      // 開頭的白底標誌圖慢慢淡出，進入 MV
+      if (el.endCard.classList.contains("show")) hideEndCard(true);
     }
   }
 
@@ -1176,7 +1194,7 @@
             if (!state.endCovered && ytTime >= getEndCoverTime(state.ytPlayer)) {
               state.endCovered = true;
               coverYtScreen(`♪ ${state.currentSong.title || ""}`);
-              showEndCard(state.currentSong); // 有指定片尾圖就蓋上白底片尾圖
+              showEndCard(state.currentSong, "end"); // 有指定蓋板圖就蓋上白底片尾圖
             }
             // songs.js 有指定 end 才提早淡出收尾
             if (ytTime >= getSongEndTime()) beginSongOutro();
@@ -1434,6 +1452,8 @@
 
     hideMenu();
     loadYoutubeVideo(videoId, { autoplay: true, startSeconds: state.clipStart });
+    // 載入期間先用白底標誌圖擋著，MV 開始播放後才慢慢淡出
+    showEndCard(song, "intro", true);
   }
 
   function handleMenuKey(e) {

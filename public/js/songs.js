@@ -12,8 +12,10 @@
  * - endCover: 影片最後幾秒要把大螢幕蓋住（選填，預設 20）。用來遮住 YouTube 片尾的
  *           推薦影片卡片，音樂照常播放。卡片出現得比較晚就填小一點，填 0 = 不蓋
  * - endCoverAt: 直接指定從 MV 第幾秒開始蓋住大螢幕（選填，有填就優先於 endCover）
- * - endImage: 蓋住大螢幕時顯示的片尾圖（選填，白底置中）。沒填就顯示 LED 待機動畫
+ * - coverImage: 白底蓋板圖（選填）。開頭載入時先用它擋著、MV 開始後慢慢淡出；
+ *           片尾蓋住推薦卡片時也顯示它。沒填就顯示 LED 待機動畫
  *           圖檔放在 public/assets/images/ 裡，這裡填相對路徑
+ * - introImage / endImage: 想讓開頭和片尾用不同圖時再分別指定（選填，優先於 coverImage）
  * - bpm:    選單上顯示用的 BPM（選填）
  * - level:  選單上顯示的難度星數 1~5（選填）
  * - color:  沒有縮圖時的卡片底色（選填）
@@ -29,7 +31,7 @@ window.SONG_LIST = [
     bpm: 128,
     level: 2,
     endCoverAt: 189.3, // 3:10 片尾推薦卡片跳出前，換上白底片尾圖
-    endImage: "assets/images/bestie-love-options-end.png"
+    coverImage: "assets/images/bestie-love-options-end.png" // 開頭載入 + 片尾共用
   },
   {
     title: "歌曲 2",
